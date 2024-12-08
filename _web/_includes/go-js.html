@@ -1111,8 +1111,6 @@
         if (!$("#hero").is(":visible") || $("#controls").is(":visible") || jukeboxData.disableKeys) {
             return;
         }
-        controlled = e.ctrlKey
-        shifted = e.shiftKey
 
         if (evt.which === 39) {  // right arrow
             var inc = driver.getIncr();
@@ -1166,14 +1164,14 @@
 
     }
 
-    function keyup(evt) {
-        controlled = e.ctrlKey
-        shifted = e.shiftKey
+    function updateCtrlShift(evt) {
+        controlled = evt.ctrlKey
+        shifted = evt.shiftKey
     }
 
-    function keypress() {
-        controlled = e.ctrlKey
-        shifted = e.shiftKey
+    function resetCtrlShit() {
+        controlled = false;
+        shifted = false;
     }
 
     function getShareURL(callback) {
@@ -1202,8 +1200,12 @@
         };
 
         $(document).keydown(keydown);
-        $(document).keyup(keyup);
-        $(document).keypress(keypress);
+
+        window.addEventListener('keydown', updateCtrlShift)
+        window.addEventListener('keyup', updateCtrlShift)
+        window.addEventListener('keypress', updateCtrlShift)
+        document.addEventListener('blur', resetCtrlShit);
+        window.addEventListener('blur', resetCtrlShit);
 
         paper = Raphael("tiles", W, H);
 

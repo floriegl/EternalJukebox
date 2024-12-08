@@ -1144,10 +1144,6 @@
         }
 
 
-        if (evt.which === 17) {  // control
-            controlled = true;
-        }
-
         if (evt.which === 72) {  // h
             jukeboxData.infiniteMode = !jukeboxData.infiniteMode;
             if (jukeboxData.infiniteMode) {
@@ -1155,10 +1151,6 @@
             } else {
                 info("Bringing it on home");
             }
-        }
-
-        if (evt.which === 16) {  // shift
-            shifted = true;
         }
 
         if (evt.which === 32) {  // space
@@ -1172,13 +1164,14 @@
 
     }
 
-    function keyup(evt) {
-        if (evt.which == 17) {  // control
-            controlled = false;
-        }
-        if (evt.which == 16) {  // shift
-            shifted = false;
-        }
+    function updateCtrlShift(evt) {
+        controlled = evt.ctrlKey
+        shifted = evt.shiftKey
+    }
+
+    function resetCtrlShit() {
+        controlled = false;
+        shifted = false;
     }
 
     function getShareURL(callback) {
@@ -1207,7 +1200,12 @@
         };
 
         $(document).keydown(keydown);
-        $(document).keyup(keyup);
+
+        window.addEventListener('keydown', updateCtrlShift)
+        window.addEventListener('keyup', updateCtrlShift)
+        window.addEventListener('keypress', updateCtrlShift)
+        document.addEventListener('blur', resetCtrlShit);
+        window.addEventListener('blur', resetCtrlShit);
 
         paper = Raphael("tiles", W, H);
 

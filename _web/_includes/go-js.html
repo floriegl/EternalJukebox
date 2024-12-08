@@ -1111,6 +1111,8 @@
         if (!$("#hero").is(":visible") || $("#controls").is(":visible") || jukeboxData.disableKeys) {
             return;
         }
+        controlled = e.ctrlKey
+        shifted = e.shiftKey
 
         if (evt.which === 39) {  // right arrow
             var inc = driver.getIncr();
@@ -1144,10 +1146,6 @@
         }
 
 
-        if (evt.which === 17) {  // control
-            controlled = true;
-        }
-
         if (evt.which === 72) {  // h
             jukeboxData.infiniteMode = !jukeboxData.infiniteMode;
             if (jukeboxData.infiniteMode) {
@@ -1155,10 +1153,6 @@
             } else {
                 info("Bringing it on home");
             }
-        }
-
-        if (evt.which === 16) {  // shift
-            shifted = true;
         }
 
         if (evt.which === 32) {  // space
@@ -1173,12 +1167,13 @@
     }
 
     function keyup(evt) {
-        if (evt.which == 17) {  // control
-            controlled = false;
-        }
-        if (evt.which == 16) {  // shift
-            shifted = false;
-        }
+        controlled = e.ctrlKey
+        shifted = e.shiftKey
+    }
+
+    function keypress() {
+        controlled = e.ctrlKey
+        shifted = e.shiftKey
     }
 
     function getShareURL(callback) {
@@ -1208,6 +1203,7 @@
 
         $(document).keydown(keydown);
         $(document).keyup(keyup);
+        $(document).keypress(keypress);
 
         paper = Raphael("tiles", W, H);
 

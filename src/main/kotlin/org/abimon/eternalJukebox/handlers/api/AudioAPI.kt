@@ -308,19 +308,21 @@ object AudioAPI : IAPI {
                                         }
 
                                         if (MediaWrapper.ffmpeg.installed) {
-                                            if (!MediaWrapper.ffmpeg.convert(tmpFile, endGoalTmp, ffmpegLog))
+                                            if (withContext(Dispatchers.IO) { !MediaWrapper.ffmpeg.convert(tmpFile, endGoalTmp, ffmpegLog) })
                                                 return logger.error(
-                                                    "[{}] Failed to convert {} to {}",
+                                                    "[{}] Failed to convert {} to {}. Check {}",
                                                     context.clientInfo.userUID,
                                                     tmpFile,
-                                                    endGoalTmp
+                                                    endGoalTmp,
+                                                    ffmpegLog.name
                                                 )
 
                                             if (!endGoalTmp.exists())
                                                 return logger.error(
-                                                    "[{}] {} still does not exist, what happened?",
+                                                    "[{}] {} does not exist, check {}",
                                                     context.clientInfo.userUID,
-                                                    endGoalTmp
+                                                    endGoalTmp,
+                                                    ffmpegLog.name
                                                 )
                                         } else
                                             return logger.error(
@@ -424,61 +426,70 @@ object AudioAPI : IAPI {
             return context.endWithStatusCode(502) {
                 this["error"] = "This server does not support uploaded audio"
             }
-        } else if (context.fileUploads().isEmpty()) {
+        }
+        if (!MediaWrapper.ffmpeg.installed) {
+            logger.error("[{}] ffmpeg not installed for audio upload", context.clientInfo.userUID)
+            return context.endWithStatusCode(502) {
+                this["error"] = "This server does not support uploaded audio"
+            }
+        }
+        if (context.fileUploads().isEmpty()) {
             return context.endWithStatusCode(400) {
                 this["error"] = "No file uploads"
             }
-        } else {
-            val file = context.fileUploads().first()
+        }
 
-            val ffmpegLog = File("${file.fileName()}-$uuid.log")
-            val starting = File(file.uploadedFileName())
-            val ending = File("$uuid.$format")
+        val file = context.fileUploads().first()
 
-            try {
-                if (MediaWrapper.ffmpeg.installed) {
-                    if (!MediaWrapper.ffmpeg.convert(starting, ending, ffmpegLog))
-                        return logger.error(
-                            "[{}] Failed to convert {} to {}",
-                            context.clientInfo.userUID,
-                            starting,
-                            ending
-                        )
+        val ffmpegLog = File("${file.fileName()}-$uuid.log")
+        val starting = File(file.uploadedFileName())
+        val ending = File("$uuid.$format")
 
-                    if (!ending.exists())
-                        return logger.error("[{}] {} does not exist, what happened?", context.clientInfo.userUID, ending)
-                } else
-                    return logger.error("[{}] ffmpeg not installed, nothing we can do", context.clientInfo.userUID)
-            } finally {
-                starting.guaranteeDelete()
-                withContext(Dispatchers.IO) {
-                    ffmpegLog.useThenDelete {
-                        EternalJukebox.storage.store(
-                            it.name,
-                            EnumStorageType.LOG,
-                            FileDataSource(it),
-                            "text/plain",
-                            context.clientInfo
-                        )
-                    }
+        try {
+            if (withContext(Dispatchers.IO) { !MediaWrapper.ffmpeg.convert(starting, ending, ffmpegLog) })
+                return logger.error(
+                    "[{}] Failed to convert {} to {}. Check {}",
+                    context.clientInfo.userUID,
+                    starting,
+                    ending,
+                    ffmpegLog.name
+                )
+
+            if (!ending.exists())
+                return logger.error("[{}] {} does not exist, check {}", context.clientInfo.userUID, ending, ffmpegLog.name)
+        } finally {
+            withContext(Dispatchers.IO) {
+                ffmpegLog.useThenDelete {
+                    EternalJukebox.storage.store(
+                        it.name,
+                        EnumStorageType.LOG,
+                        FileDataSource(it),
+                        "text/plain",
+                        context.clientInfo
+                    )
                 }
+            }
 
-                val hash = ending.useThenDelete { endingFile ->
-                    val hash = FileInputStream(endingFile).use { stream -> stream.sha512Hash() }
-                    withContext(Dispatchers.IO) {
-                        EternalJukebox.storage.store(
-                            "$hash.$format",
-                            EnumStorageType.UPLOADED_AUDIO,
-                            FileDataSource(endingFile),
-                            YoutubeAudioSource.mimes[format] ?: "audio/mpeg",
-                            context.clientInfo
-                        )
+            val hash = ending.useThenDelete { endingFile ->
+                FileInputStream(endingFile)
+                    .use { stream -> stream.sha512Hash() }
+                    .also {
+                        withContext(Dispatchers.IO) {
+                            EternalJukebox.storage.store(
+                                "$it.$format",
+                                EnumStorageType.UPLOADED_AUDIO,
+                                FileDataSource(endingFile),
+                                YoutubeAudioSource.mimes[format] ?: "audio/mpeg",
+                                context.clientInfo
+                            )
+                        }
                     }
+            }
 
-                    return@useThenDelete hash
-                } ?: return context.endWithStatusCode(502) { this["error"] = "ffmpeg goal file does not exist" }
-
+            if (hash != null) {
                 context.endWithStatusCode(201) { this["id"] = hash }
+            } else {
+                context.endWithStatusCode(502) { this["error"] = "Failed to convert audio" }
             }
         }
     }

@@ -124,15 +124,13 @@ object YoutubeAudioSource : IAudioSource {
                 }
 
                 if (MediaWrapper.ffmpeg.installed) {
-                    if (!MediaWrapper.ffmpeg.convert(tmpFile, endGoalTmp, ffmpegLog)) {
-                        logger.error("[{}] Failed to convert {} to {}", clientInfo?.userUID, tmpFile, endGoalTmp)
+                    if (withContext(Dispatchers.IO) { !MediaWrapper.ffmpeg.convert(tmpFile, endGoalTmp, ffmpegLog) }) {
+                        logger.error("[{}] Failed to convert {} to {}. Check {}", clientInfo?.userUID, tmpFile, endGoalTmp, ffmpegLog.name)
                         return null
                     }
 
                     if (!endGoalTmp.exists()) {
-                        logger.error(
-                            "[{}] {} does not exist, what happened?", clientInfo?.userUID, endGoalTmp
-                        )
+                        logger.error("[{}] {} does not exist, check {}", clientInfo?.userUID, endGoalTmp, ffmpegLog.name)
                         return null
                     }
                 } else {

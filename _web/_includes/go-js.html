@@ -1438,7 +1438,7 @@
                     xhr.upload.addEventListener("progress", function (evt) {
                         if (evt.lengthComputable) {
                             var percentComplete = evt.loaded / evt.total;
-                            percentComplete = percentComplete * 100;
+                            percentComplete = Math.floor(percentComplete * 100);
                             $('#audio-progress').text(percentComplete + '%');
                             $('#audio-progress').css('width', percentComplete + '%');
                         }
@@ -1451,7 +1451,10 @@
                     window.location.reload(true);
                 },
                 error: function (xhr, textStatus, error) {
-                    console.log("Error upon attempting to upload: " + error);
+                    if (xhr.responseJSON && typeof xhr.responseJSON.error === "string") {
+                        error = xhr.responseJSON.error;
+                    }
+                    window.alert("Error upon attempting to upload: " + error);
                 }
             });
         });
@@ -2415,7 +2418,7 @@
                     xhr.upload.addEventListener("progress", function (evt) {
                         if (evt.lengthComputable) {
                             var percentComplete = evt.loaded / evt.total;
-                            percentComplete = percentComplete * 100;
+                            percentComplete = Math.floor(percentComplete * 100);
                             $('#audio-progress').text(percentComplete + '%');
                             $('#audio-progress').css('width', percentComplete + '%');
                         }
@@ -2428,7 +2431,10 @@
                     window.location.reload(true);
                 },
                 error: function (xhr, textStatus, error) {
-                    console.log("Error: " + error);
+                    if (xhr.responseJSON && typeof xhr.responseJSON.error === "string") {
+                        error = xhr.responseJSON.error;
+                    }
+                    window.alert("Error upon attempting to upload: " + error);
                 }
             });
         });

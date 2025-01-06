@@ -107,7 +107,7 @@
                     xhr.upload.addEventListener("progress", function (evt) {
                         if (evt.lengthComputable) {
                             var percentComplete = evt.loaded / evt.total;
-                            percentComplete = percentComplete * 100;
+                            percentComplete = Math.floor(percentComplete * 100);
                             $('#analysis-progress').text(percentComplete + '%');
                             $('#analysis-progress').css('width', percentComplete + '%');
                         }

@@ -1,10 +1,8 @@
 package org.abimon.eternalJukebox.handlers.api
 
 import io.vertx.core.json.JsonArray
-import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
-import io.vertx.ext.web.handler.BodyHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.abimon.eternalJukebox.*
@@ -13,7 +11,6 @@ import org.abimon.visi.io.ByteArrayDataSource
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.util.*
 
 object AnalysisAPI : IAPI {
     override val mountPath: String = "/analysis"
@@ -22,9 +19,7 @@ object AnalysisAPI : IAPI {
     override fun setup(router: Router) {
         router.get("/analyse/:id").suspendingHandler(this::analyseSpotify)
         router.get("/search").suspendingHandler(AnalysisAPI::searchSpotify)
-        router.post("/upload/:id")
-            .handler(BodyHandler.create().setDeleteUploadedFilesOnEnd(true).setBodyLimit(10 * 1000 * 1000))
-        router.post("/upload/:id").suspendingHandler(this::upload)
+        router.post("/upload/:id").suspendingBodyHandler(this::upload, maxMb = 10)
     }
 
     private suspend fun analyseSpotify(context: RoutingContext) {
@@ -100,84 +95,86 @@ object AnalysisAPI : IAPI {
             return context.endWithStatusCode(502) {
                 this["error"] = "This server does not support uploaded analysis"
             }
-        } else if (context.fileUploads().isEmpty()) {
+        }
+        if (context.fileUploads().isEmpty()) {
             return context.endWithStatusCode(400) {
                 this["error"] = "No file uploads"
             }
         }
 
         val uploadedFile = File(context.fileUploads().first().uploadedFileName())
-        var track: JukeboxTrack? = null
 
         val info = EternalJukebox.spotify.getInfo(id, context.clientInfo) ?: run {
-            uploadedFile.guaranteeDelete()
             logger.warn("[{}] Failed to get track info for {}", context.clientInfo.userUID, id)
             return context.endWithStatusCode(400) {
                 this["error"] = "Failed to get track info"
             }
         }
 
-        try {
-            val mapResponse = withContext(Dispatchers.IO) {
-                EternalJukebox.jsonMapper.tryReadValue(uploadedFile.readBytes(), Map::class)
-            } ?: return context.endWithStatusCode(400) { this["error"] = "Analysis file could not be parsed" }
+        val track: JukeboxTrack? = try {
+            val analysisObject = withContext(Dispatchers.IO) {
+                EternalJukebox.jsonMapper.readValue(uploadedFile.readBytes(), Map::class.java)
+            }?.toJsonObject()
 
-            val obj = JsonObject(mapResponse.mapKeys { (key) -> "$key" })
-            track = JukeboxTrack(
-                info,
-                withContext(Dispatchers.IO) {
-                    JukeboxAnalysis(
-                        EternalJukebox.jsonMapper.readValue(
-                            obj.getJsonArray("sections").toString(),
-                            Array<SpotifyAudioSection>::class.java
-                        ),
-                        EternalJukebox.jsonMapper.readValue(
-                            obj.getJsonArray("bars").toString(),
-                            Array<SpotifyAudioBar>::class.java
-                        ),
-                        EternalJukebox.jsonMapper.readValue(
-                            obj.getJsonArray("beats").toString(),
-                            Array<SpotifyAudioBeat>::class.java
-                        ),
-                        EternalJukebox.jsonMapper.readValue(
-                            obj.getJsonArray("tatums").toString(),
-                            Array<SpotifyAudioTatum>::class.java
-                        ),
-                        EternalJukebox.jsonMapper.readValue(
-                            obj.getJsonArray("segments").toString(),
-                            Array<SpotifyAudioSegment>::class.java
+            analysisObject?.let {
+                JukeboxTrack(
+                    info,
+                    withContext(Dispatchers.IO) {
+                        JukeboxAnalysis(
+                            EternalJukebox.jsonMapper.readValue(
+                                it.getJsonArray("sections").toString(),
+                                Array<SpotifyAudioSection>::class.java
+                            ),
+                            EternalJukebox.jsonMapper.readValue(
+                                it.getJsonArray("bars").toString(),
+                                Array<SpotifyAudioBar>::class.java
+                            ),
+                            EternalJukebox.jsonMapper.readValue(
+                                it.getJsonArray("beats").toString(),
+                                Array<SpotifyAudioBeat>::class.java
+                            ),
+                            EternalJukebox.jsonMapper.readValue(
+                                it.getJsonArray("tatums").toString(),
+                                Array<SpotifyAudioTatum>::class.java
+                            ),
+                            EternalJukebox.jsonMapper.readValue(
+                                it.getJsonArray("segments").toString(),
+                                Array<SpotifyAudioSegment>::class.java
+                            )
                         )
-                    )
-                },
-                JukeboxSummary((mapResponse["track"] as Map<*, *>)["duration"].toString().toDouble())
-            )
-
-            if (track.info.duration != (track.audio_summary.duration * 1000).toInt()) {
-                return context.endWithStatusCode(400) {
-                    this["error"] = "Track duration does not match analysis duration. This is likely due to an incorrect analysis file. Make sure it is for the song ${info.name} by ${info.artist}"
-                }
-            }
-
-            context.response().putHeader("X-Client-UID", context.clientInfo.userUID)
-                .end(track.toJsonObject())
-
-            withContext(Dispatchers.IO) {
-                EternalJukebox.storage.store(
-                    "$id.json",
-                    EnumStorageType.UPLOADED_ANALYSIS,
-                    ByteArrayDataSource(track.toJsonObject().toString().toByteArray(Charsets.UTF_8)),
-                    "application/json",
-                    context.clientInfo
+                    },
+                    JukeboxSummary(it.getJsonObject("track").getDouble("duration"))
                 )
             }
-        } finally {
-            uploadedFile.guaranteeDelete()
+        } catch (e: Exception) {
+            logger.warn("[{}] Failed to parse analysis file for {}", context.clientInfo.userUID, id, e)
+            null
+        }
 
-            if (track == null) {
-                context.endWithStatusCode(400) { this["error"] = "Analysis file could not be parsed" }
-            } else {
-                logger.info("[{}] Uploaded analysis for {}", context.clientInfo.userUID, id)
+        if (track == null) {
+            return context.endWithStatusCode(400) {
+                this["error"] = "Analysis file could not be parsed"
             }
+        }
+        if (track.info.duration != (track.audio_summary.duration * 1000).toInt()) {
+            return context.endWithStatusCode(400) {
+                this["error"] = "Track duration does not match analysis duration. This is likely due to an incorrect " +
+                        "analysis file. Make sure it is for the song ${info.name} by ${info.artist}"
+            }
+        }
+
+        context.response().putHeader("X-Client-UID", context.clientInfo.userUID)
+            .end(track.toJsonObject())
+
+        logger.info("[{}] Uploaded analysis for {}", context.clientInfo.userUID, id)
+        withContext(Dispatchers.IO) {
+            EternalJukebox.storage.store(
+                "$id.json",
+                EnumStorageType.UPLOADED_ANALYSIS,
+                ByteArrayDataSource(track.toJsonObject().toString().toByteArray(Charsets.UTF_8)),
+                "application/json",
+                context.clientInfo
+            )
         }
     }
 

@@ -6,7 +6,6 @@ import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
-import io.vertx.ext.web.handler.BodyHandler
 import kotlinx.coroutines.*
 import org.abimon.eternalJukebox.*
 import org.abimon.eternalJukebox.objects.ClientInfo
@@ -32,11 +31,9 @@ object SiteAPI: IAPI {
         router.get("/healthy").handler { it.response().end("Up for ${startupTime.timeDifference()}") }
         router.get("/usage").handler(SiteAPI::usage)
 
-        router.post().handler(BodyHandler.create().setBodyLimit(1 * 1000 * 1000).setDeleteUploadedFilesOnEnd(true))
-
         router.get("/expand/:id").suspendingHandler(SiteAPI::expand)
         router.get("/expand/:id/redirect").suspendingHandler(SiteAPI::expandAndRedirect)
-        router.post("/shrink").suspendingHandler(SiteAPI::shrink)
+        router.post("/shrink").suspendingBodyHandler(SiteAPI::shrink, maxMb = 1)
 
         router.get("/popular/:service").suspendingHandler(this::popular)
     }

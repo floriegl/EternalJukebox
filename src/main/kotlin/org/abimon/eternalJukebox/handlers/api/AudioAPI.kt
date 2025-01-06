@@ -5,7 +5,6 @@ import com.github.kittinunf.fuel.core.Request
 import com.github.kittinunf.fuel.core.Response
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
-import io.vertx.ext.web.handler.BodyHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.abimon.eternalJukebox.*
@@ -49,9 +48,7 @@ object AudioAPI : IAPI {
         router.get("/jukebox/:id").suspendingHandler(AudioAPI::jukeboxAudio)
         router.get("/jukebox/:id/location").suspendingHandler(AudioAPI::jukeboxLocation)
         router.get("/external").suspendingHandler(AudioAPI::externalAudio)
-        router.post("/upload")
-            .handler(BodyHandler.create().setDeleteUploadedFilesOnEnd(true).setBodyLimit(25 * 1000 * 1000))
-        router.post("/upload").suspendingHandler(this::upload)
+        router.post("/upload").suspendingBodyHandler(this::upload, maxMb = 25)
     }
 
     private suspend fun jukeboxAudio(context: RoutingContext) {

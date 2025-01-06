@@ -6,6 +6,7 @@ import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.RoutingContext
+import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
@@ -51,5 +52,14 @@ val RoutingContext.clientInfo: ClientInfo
 
 operator fun JsonObject.set(key: String, value: Any): JsonObject = put(key, value)
 
+fun Route.suspendingBodyHandler(handler: suspend (RoutingContext) -> Unit, maxMb: Long): Route =
+    handler(BodyHandler.create().setBodyLimit(maxMb * 1000 * 1000).setDeleteUploadedFilesOnEnd(true))
+        .suspendingHandler(handler)
+
 @OptIn(DelicateCoroutinesApi::class)
-fun Route.suspendingHandler(handler: suspend (RoutingContext) -> Unit): Route = handler { ctx -> GlobalScope.launch(ctx.vertx().dispatcher()) { handler(ctx) } }
+fun Route.suspendingHandler(handler: suspend (RoutingContext) -> Unit): Route =
+    handler { ctx ->
+        GlobalScope.launch(ctx.vertx().dispatcher()) {
+            handler(ctx)
+        }
+    }

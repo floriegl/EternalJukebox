@@ -1,9 +1,5 @@
 package org.abimon.eternalJukebox
 
-import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.core.JsonProcessingException
-import com.fasterxml.jackson.databind.JsonMappingException
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.vertx.core.json.JsonObject
 import kotlinx.coroutines.*
 import org.slf4j.Logger
@@ -89,15 +85,6 @@ fun ScheduledExecutorService.scheduleAtFixedRate(
 ): ScheduledFuture<*> = this.scheduleAtFixedRate(op, initialDelay, every, unit)
 
 fun ScheduledExecutorService.schedule(delay: Long, unit: TimeUnit = TimeUnit.MILLISECONDS, op: () -> Unit): ScheduledFuture<*> = this.schedule(op, delay, unit)
-
-fun <T : Any> ObjectMapper.tryReadValue(src: ByteArray, klass: KClass<T>): T? = try {
-    this.readValue(src, klass.java)
-} catch (e: Exception) {
-    when (e) {
-        is JsonMappingException, is JsonParseException, is JsonProcessingException -> null
-        else -> throw e
-    }
-}
 
 fun String.toBase64LongOrNull(): Long? {
     var i = 0

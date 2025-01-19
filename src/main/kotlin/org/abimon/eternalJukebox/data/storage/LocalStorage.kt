@@ -4,10 +4,10 @@ import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.abimon.eternalJukebox.EternalJukebox
+import org.abimon.eternalJukebox.clientInfo
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.EnumStorageType
 import org.abimon.visi.io.DataSource
-import org.abimon.visi.io.FileDataSource
 import java.io.File
 import java.io.FileOutputStream
 import java.util.*
@@ -34,17 +34,10 @@ object LocalStorage : IStorage {
         }
     }
 
-    override suspend fun provide(name: String, type: EnumStorageType, clientInfo: ClientInfo?): DataSource? {
-        val file = File(storageLocations[type]!!, name)
-        if(file.exists())
-            return FileDataSource(file)
-        return null
-    }
-
-    override suspend fun provide(name: String, type: EnumStorageType, context: RoutingContext, clientInfo: ClientInfo?): Boolean {
+    override suspend fun provide(name: String, type: EnumStorageType, context: RoutingContext): Boolean {
         val file = File(storageLocations[type]!!, name)
         if(file.exists()) {
-            context.response().putHeader("X-Client-UID", clientInfo?.userUID ?: "N/a").sendFile(file.absolutePath)
+            context.response().putHeader("X-Client-UID", context.clientInfo.userUID).sendFile(file.absolutePath)
             return true
         }
 

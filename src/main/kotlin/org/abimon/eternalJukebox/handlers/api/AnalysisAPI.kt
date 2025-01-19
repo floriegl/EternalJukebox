@@ -25,36 +25,12 @@ object AnalysisAPI : IAPI {
     private suspend fun analyseSpotify(context: RoutingContext) {
         if (EternalJukebox.storage.shouldStore(EnumStorageType.ANALYSIS)) {
             val id = context.pathParam("id")
-            if (EternalJukebox.storage.isStored("$id.json", EnumStorageType.ANALYSIS)) {
-                if (EternalJukebox.storage.provide("$id.json", EnumStorageType.ANALYSIS, context, context.clientInfo))
-                    return
-
-                val data = EternalJukebox.storage.provide("$id.json", EnumStorageType.ANALYSIS, context.clientInfo)
-                if (data != null)
-                    return context.response().putHeader("X-Client-UID", context.clientInfo.userUID)
-                        .end(data, "application/json")
-            }
+            if (EternalJukebox.storage.provideIfStored("$id.json", EnumStorageType.ANALYSIS, context))
+                return
 
             if (EternalJukebox.storage.shouldStore(EnumStorageType.UPLOADED_ANALYSIS)) {
-                if (EternalJukebox.storage.isStored("$id.json", EnumStorageType.UPLOADED_ANALYSIS)) {
-                    if (EternalJukebox.storage.provide(
-                            "$id.json",
-                            EnumStorageType.UPLOADED_ANALYSIS,
-                            context,
-                            context.clientInfo
-                        )
-                    ) return
-
-                    val data =
-                        EternalJukebox.storage.provide(
-                            "$id.json",
-                            EnumStorageType.UPLOADED_ANALYSIS,
-                            context.clientInfo
-                        )
-                    if (data != null)
-                        return context.response().putHeader("X-Client-UID", context.clientInfo.userUID)
-                            .end(data, "application/json")
-                }
+                if (EternalJukebox.storage.provideIfStored("$id.json", EnumStorageType.UPLOADED_ANALYSIS, context))
+                    return
 
                 return context.response().putHeader("X-Client-UID", context.clientInfo.userUID).setStatusCode(400).end(
                     jsonObjectOf(

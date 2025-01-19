@@ -13,11 +13,10 @@ import org.abimon.visi.io.DataSource
 object EmptyDataAPI: IAnalyser, IAudioSource, IDatabase, IStorage, IAnalyticsStorage, IAnalyticsProvider {
     override fun shouldStore(type: EnumStorageType): Boolean = false
     override suspend fun search(query: String, clientInfo: ClientInfo?): Array<JukeboxInfo> = emptyArray()
-    override suspend fun provide(info: JukeboxInfo, clientInfo: ClientInfo?): DataSource? = null
+    override suspend fun provide(info: JukeboxInfo, context: RoutingContext): Boolean = false
     override suspend fun store(name: String, type: EnumStorageType, data: DataSource, mimeType: String, clientInfo: ClientInfo?): Boolean = false
     override suspend fun getInfo(id: String, clientInfo: ClientInfo?): JukeboxInfo? = null
-    override suspend fun provide(name: String, type: EnumStorageType, clientInfo: ClientInfo?): DataSource? = null
-    override suspend fun provide(name: String, type: EnumStorageType, context: RoutingContext, clientInfo: ClientInfo?): Boolean = false
+    override suspend fun provide(name: String, type: EnumStorageType, context: RoutingContext): Boolean = false
     override suspend fun isStored(name: String, type: EnumStorageType): Boolean = false
     override fun <T: Any> store(now: Long, data: T, type: EnumAnalyticType<T>): Boolean = false
     override suspend fun provideAudioTrackOverride(id: String, clientInfo: ClientInfo?): String? = null

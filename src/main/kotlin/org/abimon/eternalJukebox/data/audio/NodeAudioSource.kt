@@ -1,16 +1,16 @@
 package org.abimon.eternalJukebox.data.audio
 
+import io.vertx.ext.web.RoutingContext
+import org.abimon.eternalJukebox.clientInfo
 import org.abimon.eternalJukebox.data.NodeSource
-import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.JukeboxInfo
-import org.abimon.visi.io.DataSource
 
 @Suppress("UNCHECKED_CAST")
 object NodeAudioSource: NodeSource(), IAudioSource {
     @Suppress("JoinDeclarationAndAssignment")
     override val nodeHosts: Array<String>
 
-    override suspend fun provide(info: JukeboxInfo, clientInfo: ClientInfo?): DataSource? = provide("audio/${info.id}?user_uid=${clientInfo?.userUID}")
+    override suspend fun provide(info: JukeboxInfo, context: RoutingContext): Boolean = provide("audio/${info.id}?user_uid=${context.clientInfo.userUID}", context)
 
     init {
         nodeHosts = if (audioSourceOptions.containsKey("NODE_HOST"))

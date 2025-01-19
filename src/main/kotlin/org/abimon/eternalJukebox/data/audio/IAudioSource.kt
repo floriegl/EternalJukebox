@@ -1,9 +1,9 @@
 package org.abimon.eternalJukebox.data.audio
 
+import io.vertx.ext.web.RoutingContext
 import org.abimon.eternalJukebox.EternalJukebox
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.JukeboxInfo
-import org.abimon.visi.io.DataSource
 import java.net.URL
 
 @FunctionalInterface
@@ -11,10 +11,10 @@ interface IAudioSource {
     val audioSourceOptions
         get() = EternalJukebox.config.audioSourceOptions
     /**
-     * Provide the audio data for a required song
-     * Returns a data source pointing to a **valid audio file**, or null if none can be obtained
+     * Provide the audio data for a required song to the routing context.
+     * Returns true if handled; false otherwise.
      */
-    suspend fun provide(info: JukeboxInfo, clientInfo: ClientInfo?): DataSource?
+    suspend fun provide(info: JukeboxInfo, context: RoutingContext): Boolean
 
     /**
      * Provide a location for a required song

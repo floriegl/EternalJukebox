@@ -27,7 +27,7 @@ object MediaWrapper {
                 return ffmpegProcess.exitValue() == 0
             }
 
-            ffmpegProcess.destroyForcibly()
+            ffmpegProcess.destroyForcibly().waitFor()
             return false
         }
     }

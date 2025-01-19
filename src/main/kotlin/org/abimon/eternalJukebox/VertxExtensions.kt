@@ -1,6 +1,5 @@
 package org.abimon.eternalJukebox
 
-import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpServerResponse
 import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
@@ -13,8 +12,6 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.ConstantValues
-import org.abimon.visi.io.DataSource
-import org.abimon.visi.io.readChunked
 
 fun HttpServerResponse.end(json: JsonArray) = putHeader("Content-Type", "application/json").end(json.toString())
 fun HttpServerResponse.end(json: JsonObject) = putHeader("Content-Type", "application/json").end(json.toString())
@@ -27,13 +24,6 @@ fun RoutingContext.endWithStatusCode(statusCode: Int, init: JsonObject.() -> Uni
             .putHeader("Content-Type", "application/json")
             .putHeader("X-Client-UID", clientInfo.userUID)
             .end(json.toString())
-}
-
-fun HttpServerResponse.end(data: DataSource, contentType: String = "application/octet-stream") {
-    putHeader("Content-Type", contentType)
-    putHeader("Content-Length", "${data.size}")
-    data.use { stream -> stream.readChunked { chunk -> write(Buffer.buffer(chunk)) } }
-    end()
 }
 
 fun HttpServerResponse.redirect(url: String): Unit = putHeader("Location", url).setStatusCode(307).end()

@@ -1,13 +1,10 @@
 package org.abimon.eternalJukebox.data.audio
 
 import com.github.kittinunf.fuel.Fuel
+import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.*
-import org.abimon.eternalJukebox.EternalJukebox
-import org.abimon.eternalJukebox.MediaWrapper
-import org.abimon.eternalJukebox.guaranteeDelete
+import org.abimon.eternalJukebox.*
 import org.abimon.eternalJukebox.objects.*
-import org.abimon.eternalJukebox.useThenDelete
-import org.abimon.visi.io.DataSource
 import org.abimon.visi.io.FileDataSource
 import org.schabi.newpipe.extractor.*
 import org.schabi.newpipe.extractor.search.SearchInfo
@@ -54,8 +51,8 @@ object YoutubeAudioSource : IAudioSource {
     private val hitQuota = AtomicLong(-1)
     private val QUOTA_TIMEOUT = TimeUnit.MILLISECONDS.convert(10, TimeUnit.MINUTES)
 
-    override suspend fun provide(info: JukeboxInfo, clientInfo: ClientInfo?): DataSource? {
-        logger.trace("[{}] Attempting to provide audio for {}", clientInfo?.userUID, info.id)
+    override suspend fun provide(info: JukeboxInfo, context: RoutingContext): Boolean {
+        logger.trace("[{}] Attempting to provide audio for {}", context.clientInfo.userUID, info.id)
 
         var youTubeUrl: String? = null
         val queryText = "${info.artist} - ${info.title}"
@@ -72,7 +69,7 @@ object YoutubeAudioSource : IAudioSource {
 
             videoDetails.minByOrNull { abs(info.duration - it.contentDetails.duration.toMillis()) }
                 ?.let { youTubeUrl = VIDEO_LINK_PREFIX + it.id } ?: run {
-                logger.warn("[${clientInfo?.userUID}] Searches for \"$queryText\" using YouTube Data API v3 turned up nothing")
+                logger.warn("[${context.clientInfo.userUID}] Searches for \"$queryText\" using YouTube Data API v3 turned up nothing")
             }
         }
         if (youTubeUrl == null) {
@@ -80,13 +77,13 @@ object YoutubeAudioSource : IAudioSource {
 
             infoItems.minByOrNull { abs(info.duration - TimeUnit.SECONDS.toMillis(it.duration)) }
                 ?.let { youTubeUrl = it.url } ?: run {
-                logger.error("[${clientInfo?.userUID}] Searches for \"$queryText\" using NewPipeExtractor turned up nothing")
+                logger.error("[${context.clientInfo.userUID}] Searches for \"$queryText\" using NewPipeExtractor turned up nothing")
             }
         }
 
-        if (youTubeUrl == null) return null
+        if (youTubeUrl == null) return false
         logger.trace(
-            "[{}] Settled on {}", clientInfo?.userUID, youTubeUrl
+            "[{}] Settled on {}", context.clientInfo.userUID, youTubeUrl
         )
 
         val tmpFile = File("$uuid.tmp")
@@ -108,33 +105,33 @@ object YoutubeAudioSource : IAudioSource {
                 if (!downloadProcess.waitFor(90, TimeUnit.SECONDS)) {
                     downloadProcess.destroyForcibly().waitFor()
                     logger.error(
-                        "[{}] Forcibly destroyed the download process for {}", clientInfo?.userUID, youTubeUrl
+                        "[{}] Forcibly destroyed the download process for {}", context.clientInfo.userUID, youTubeUrl
                     )
                 }
             }
 
             if (!endGoalTmp.exists()) {
                 logger.warn(
-                    "[{}] {} does not exist, attempting to convert with ffmpeg", clientInfo?.userUID, endGoalTmp
+                    "[{}] {} does not exist, attempting to convert with ffmpeg", context.clientInfo.userUID, endGoalTmp
                 )
 
                 if (!tmpFile.exists()) {
-                    logger.error("[{}] {} does not exist, what happened?", clientInfo?.userUID, tmpFile)
-                    return null
+                    logger.error("[{}] {} does not exist, what happened?", context.clientInfo.userUID, tmpFile)
+                    return false
                 }
 
                 if (MediaWrapper.ffmpeg.installed) {
                     if (withContext(Dispatchers.IO) { !MediaWrapper.ffmpeg.convert(tmpFile, endGoalTmp, ffmpegLog) }) {
-                        logger.error("[{}] Failed to convert {} to {}. Check {}", clientInfo?.userUID, tmpFile, endGoalTmp, ffmpegLog.name)
-                        return null
+                        logger.error("[{}] Failed to convert {} to {}. Check {}", context.clientInfo.userUID, tmpFile, endGoalTmp, ffmpegLog.name)
+                        return false
                     }
 
                     if (!endGoalTmp.exists()) {
-                        logger.error("[{}] {} does not exist, check {}", clientInfo?.userUID, endGoalTmp, ffmpegLog.name)
-                        return null
+                        logger.error("[{}] {} does not exist, check {}", context.clientInfo.userUID, endGoalTmp, ffmpegLog.name)
+                        return false
                     }
                 } else {
-                    logger.debug("[{}] ffmpeg not installed, nothing we can do", clientInfo?.userUID)
+                    logger.debug("[{}] ffmpeg not installed, nothing we can do", context.clientInfo.userUID)
                 }
             }
 
@@ -149,7 +146,7 @@ object YoutubeAudioSource : IAudioSource {
                 }
                 if (videoId != null) {
                     logger.debug("Storing Location from yt-dlp")
-                    EternalJukebox.database.storeAudioLocation(info.id, VIDEO_LINK_PREFIX + videoId, clientInfo)
+                    EternalJukebox.database.storeAudioLocation(info.id, VIDEO_LINK_PREFIX + videoId, context.clientInfo)
                 }
                 endGoalTmp.useThenDelete {
                     EternalJukebox.storage.store(
@@ -157,24 +154,24 @@ object YoutubeAudioSource : IAudioSource {
                         EnumStorageType.AUDIO,
                         FileDataSource(it),
                         mimes[format] ?: "audio/mpeg",
-                        clientInfo
+                        context.clientInfo
                     )
                 }
             }
 
-            return EternalJukebox.storage.provide("${info.id}.$format", EnumStorageType.AUDIO, clientInfo)
+            return EternalJukebox.storage.safeProvide("${info.id}.$format", EnumStorageType.AUDIO, context)
         } finally {
             tmpFile.guaranteeDelete()
             File(tmpFile.absolutePath + ".part").guaranteeDelete()
             withContext(Dispatchers.IO) {
                 tmpLog.useThenDelete {
                     EternalJukebox.storage.store(
-                        it.name, EnumStorageType.LOG, FileDataSource(it), "text/plain", clientInfo
+                        it.name, EnumStorageType.LOG, FileDataSource(it), "text/plain", context.clientInfo
                     )
                 }
                 ffmpegLog.useThenDelete {
                     EternalJukebox.storage.store(
-                        it.name, EnumStorageType.LOG, FileDataSource(it), "text/plain", clientInfo
+                        it.name, EnumStorageType.LOG, FileDataSource(it), "text/plain", context.clientInfo
                     )
                 }
                 endGoalTmp.useThenDelete {
@@ -183,7 +180,7 @@ object YoutubeAudioSource : IAudioSource {
                         EnumStorageType.AUDIO,
                         FileDataSource(it),
                         mimes[format] ?: "audio/mpeg",
-                        clientInfo
+                        context.clientInfo
                     )
                 }
             }

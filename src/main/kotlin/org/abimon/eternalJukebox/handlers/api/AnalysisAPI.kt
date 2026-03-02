@@ -32,13 +32,13 @@ object AnalysisAPI : IAPI {
                 if (EternalJukebox.storage.provideIfStored("$id.json", EnumStorageType.UPLOADED_ANALYSIS, context))
                     return
 
-                return context.response().putHeader("X-Client-UID", context.clientInfo.userUID).setStatusCode(400).end(
-                    jsonObjectOf(
-                        "error" to "This track currently has no analysis data. Below is a tutorial on how to manually provide analysis data on Desktop.",
-                        "show_manual_analysis_info" to true,
-                        "client_uid" to context.clientInfo.userUID
-                    )
-                )
+//                return context.response().putHeader("X-Client-UID", context.clientInfo.userUID).setStatusCode(400).end(
+//                    jsonObjectOf(
+//                        "error" to "This track currently has no analysis data. Below is a tutorial on how to manually provide analysis data on Desktop.",
+//                        "show_manual_analysis_info" to true,
+//                        "client_uid" to context.clientInfo.userUID
+//                    )
+//                )
             }
 
             context.response().putHeader("X-Client-UID", context.clientInfo.userUID).setStatusCode(400).end(

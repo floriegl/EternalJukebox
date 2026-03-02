@@ -21,13 +21,32 @@ object SpotifyAnalyser : IAnalyser {
     private val logger: Logger = LoggerFactory.getLogger("SpotifyAnalyser")
 
     override suspend fun search(query: String, clientInfo: ClientInfo?): Array<JukeboxInfo> {
-        var error: SpotifyError? = null
         val array: ArrayList<JukeboxInfo> = arrayListOf()
+
+        val success = searchWithOffset(array, query, 0, clientInfo)
+        if (success)
+            searchWithOffset(array, query, 10, clientInfo)
+
+        return array.toTypedArray()
+    }
+
+    private suspend fun searchWithOffset(
+        trackList: ArrayList<JukeboxInfo>,
+        query: String,
+        offset: Int,
+        clientInfo: ClientInfo?
+    ): Boolean {
+        var error: SpotifyError? = null
         val success = exponentiallyBackoff(16000, 8) {
-            logger.trace("[{}] Attempting to search Spotify for \"{}\"", clientInfo?.userUID, query)
+            logger.trace(
+                "[{}] Attempting to search Spotify for \"{}\" with offset {}",
+                clientInfo?.userUID,
+                query,
+                offset
+            )
             val (_, response, _) = Fuel.get(
                 "https://api.spotify.com/v1/search",
-                listOf("q" to query, "type" to "track")
+                listOf("q" to query, "type" to "track", "limit" to 10, "offset" to offset)
             ).bearer(token.get()).awaitStringResponseResult()
             val mapResponse =
                 withContext(Dispatchers.IO) { EternalJukebox.jsonMapper.readValue(response.data, Map::class.java) }
@@ -38,9 +57,9 @@ object SpotifyAnalyser : IAnalyser {
                         it is Map<*, *> && it.containsKey(
                             "id"
                         )
-                    }.map {
+                    }.forEach {
                         val track = it as Map<*, *>
-                        array.add(
+                        trackList.add(
                             JukeboxInfo(
                                 "SPOTIFY",
                                 track["id"] as String,
@@ -103,11 +122,16 @@ object SpotifyAnalyser : IAnalyser {
         } && error == null
 
         if (success)
-            logger.trace("[{}] Successfully searched for \"{}\"", clientInfo?.userUID, query)
+            logger.trace("[{}] Successfully searched for \"{}\" with offset {}", clientInfo?.userUID, query, offset)
         else
-            logger.trace("[{}] Failed to search for \"{}\". Error: {}", clientInfo?.userUID, query, error)
-
-        return array.toTypedArray()
+            logger.trace(
+                "[{}] Failed to search for \"{}\" with offset {}. Error: {}",
+                clientInfo?.userUID,
+                query,
+                offset,
+                error
+            )
+        return success
     }
 
     override suspend fun getInfo(id: String, clientInfo: ClientInfo?): JukeboxInfo? {
@@ -195,15 +219,17 @@ object SpotifyAnalyser : IAnalyser {
         val success = exponentiallyBackoff(64000, 8) { attempt ->
             logger.trace("Attempting to reload Spotify Token; Attempt {}", attempt)
             val (_, response, _) =
-                Fuel.post("https://accounts.spotify.com/api/token").header("Content-Type", "application/x-www-form-urlencoded").body("grant_type=client_credentials")
-                    .authentication().basic(EternalJukebox.config.spotifyClient
-                        ?: run {
+                Fuel.post("https://accounts.spotify.com/api/token")
+                    .header("Content-Type", "application/x-www-form-urlencoded").body("grant_type=client_credentials")
+                    .authentication().basic(
+                        EternalJukebox.config.spotifyClient
+                            ?: run {
+                                error = SpotifyError.NO_AUTH_DETAILS
+                                return@exponentiallyBackoff false
+                            }, EternalJukebox.config.spotifySecret ?: run {
                             error = SpotifyError.NO_AUTH_DETAILS
                             return@exponentiallyBackoff false
-                        }, EternalJukebox.config.spotifySecret ?: run {
-                        error = SpotifyError.NO_AUTH_DETAILS
-                        return@exponentiallyBackoff false
-                    }).awaitStringResponseResult()
+                        }).awaitStringResponseResult()
 
             when (response.statusCode) {
                 200 -> {

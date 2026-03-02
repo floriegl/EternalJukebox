@@ -7,7 +7,7 @@ RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /us
     && chmod a+rx /usr/local/bin/yt-dlp
 
 RUN apk update \
-    && apk add ffmpeg gettext python3 \
+    && apk add --no-cache nodejs npm ffmpeg gettext python3 \
     && touch hikari.properties
 
 # build jar with gradle
